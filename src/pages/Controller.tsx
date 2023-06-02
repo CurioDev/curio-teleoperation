@@ -127,7 +127,14 @@ export default function Controller() {
 			{isPeerConnected ? (
 				<>
 					<div>
-						<video ref={remoteVideoRef} height="50%" />
+						<video
+							ref={remoteVideoRef}
+							height="50%"
+							autoPlay
+							loop
+							muted
+							playsInline
+						/>
 					</div>
 					<Button
 						onClick={() => {

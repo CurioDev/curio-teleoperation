@@ -138,7 +138,14 @@ export default function Host() {
 						</Button>
 					)}
 					<div>
-						<video ref={currentUserVideoRef} height="50%" />
+						<video
+							ref={currentUserVideoRef}
+							height="50%"
+							autoPlay
+							loop
+							muted
+							playsInline
+						/>
 					</div>
 					This is the Host device.
 				</>
