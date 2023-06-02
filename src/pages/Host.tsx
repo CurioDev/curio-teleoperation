@@ -100,7 +100,7 @@ export default function Host() {
 		const callPeer = async () => {
 			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: false,
-				video: true,
+				video: { facingMode: "environment" },
 			});
 			if (peerInstance.current) {
 				const call = peerInstance.current.call(otherPeerID, stream);
