@@ -9,7 +9,7 @@ import {
 	Stack,
 	Typography,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import QRCode from "qrcode";
 // import { joinRoom } from "trystero";
@@ -19,9 +19,14 @@ import Peer, { DataConnection } from "peerjs";
 
 export default function Host() {
 	const { roomID } = useParams();
+	const [otherPeerID, setOtherPeerID] = useState<string>("");
 	const [useExternalHost, setUseExternalHost] = useState<boolean>(false);
 	const [qrCode, setQrCode] = useState<string | undefined>(undefined);
 	const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
+	const [isCallStarted, setIsCallStarted] = useState<boolean>(false);
+	const currentUserVideoRef = useRef<HTMLVideoElement>(null);
+
+	const peerInstance = useRef<Peer | null>(null);
 
 	useEffect(() => {
 		let finalRoomID = roomID;
@@ -33,7 +38,8 @@ export default function Host() {
 
 		const peer = new Peer(finalRoomID);
 		peer.on("open", () => {
-			const url = `http://localhost:3000/controller/${finalRoomID}`;
+			const url = `https://curio-teleoperation.vercel.app/controller/${finalRoomID}`;
+			// const url = `http://localhost:3000/controller/${finalRoomID}`;
 
 			console.log(url);
 			QRCode.toDataURL(
@@ -53,12 +59,17 @@ export default function Host() {
 		});
 
 		peer.on("connection", (connection) => {
-			console.log(connection);
+			console.log(connection.peer);
+			setOtherPeerID(connection.peer);
+			setIsPeerConnected(true);
+			setQrCode(undefined);
 
 			connection.on("data", (data) => {
 				processReceivedData(data as PeerData);
 			});
 		});
+
+		peerInstance.current = peer;
 
 		// const room = joinRoom({ appId: "Curio-Joystick" }, finalRoomID);
 		// room.onPeerJoin((peerID) => {
@@ -85,6 +96,25 @@ export default function Host() {
 		// });
 	}, []);
 
+	const startVideo = () => {
+		const callPeer = async () => {
+			const stream = await navigator.mediaDevices.getUserMedia({
+				audio: false,
+				video: true,
+			});
+			if (peerInstance.current) {
+				const call = peerInstance.current.call(otherPeerID, stream);
+				setIsCallStarted(true);
+			}
+
+			if (currentUserVideoRef.current) {
+				currentUserVideoRef.current.srcObject = stream;
+				currentUserVideoRef.current.play();
+			}
+		};
+		callPeer();
+	};
+
 	return (
 		<Stack
 			direction="column"
@@ -92,7 +122,27 @@ export default function Host() {
 			alignItems="center"
 			height="100vh"
 		>
-			This is the Host page. RoomID: {roomID}
+			{qrCode && (
+				<>
+					<Typography>
+						Scan the QR code on the Controller device.
+					</Typography>
+					<img alt="QR Code" src={qrCode} width="100%" />
+				</>
+			)}
+			{isPeerConnected && (
+				<>
+					{!isCallStarted && (
+						<Button onClick={startVideo} variant="contained">
+							START VIDEO
+						</Button>
+					)}
+					<div>
+						<video ref={currentUserVideoRef} height="50%" />
+					</div>
+					This is the Host device.
+				</>
+			)}
 		</Stack>
 	);
 }

@@ -8,7 +8,8 @@ function App() {
 	return (
 		<BrowserRouter>
 			<Routes>
-				<Route path="/" element={<Home />} />
+				<Route path="/" element={<Host />} />
+				{/* <Route path="/" element={<Home />} /> */}
 				<Route path="/:roomID" element={<Home />} />
 				<Route path="controller/:roomID" element={<Controller />} />
 				<Route path="host/" element={<Host />} />

@@ -10,74 +10,68 @@ export default function Controller() {
 	const curio = new Curio();
 	const { roomID } = useParams();
 	const peer = new Peer(); // Create PeerJS instance
-	let connection: DataConnection | null = null; // Store the connection
 
+	peer.on("call", (call) => {
+		console.log("call");
+
+		call.answer();
+		call.on("stream", function (remoteStream) {
+			console.log(remoteStream);
+
+			if (remoteVideoRef.current) {
+				remoteVideoRef.current.srcObject = remoteStream;
+				remoteVideoRef.current.play();
+			}
+		});
+	});
+	const [connection, setConnection] = useState<DataConnection>(); // Store the connection
+	const [isPeerConnected, setIsPeerConnected] = useState<boolean>(false);
 	const [isConnected, setIsConnected] = useState<boolean>(false);
 	const [isMoving, setIsMoving] = useState<boolean>(false);
 
-	useEffect(() => {
+	const remoteVideoRef = useRef<HTMLVideoElement>(null);
+
+	const peerConnection = () => {
 		if (roomID) {
 			console.log(roomID);
 
-			connection = peer.connect(roomID);
-			console.log(connection);
+			const conn = peer.connect(roomID);
+			setConnection(conn);
+			console.log(conn);
+			setIsPeerConnected(true);
 		}
-
-		return () => {
-			connection?.close();
-			peer.disconnect(); // Disconnect from the PeerJS server
-		};
-	}, []);
+	};
 
 	const sendMessage = (data: PeerData) => {
 		if (connection) {
+			console.log(data);
+
 			connection.send(data); // Send the message to the receiver
 		}
 	};
 
 	const handleConnect = () => {
-		if (sendMessage) {
-			const connectData: PeerData = {
-				type: DataType.CURIO_CONNECT,
-				data: { isConnected: isConnected },
-			};
-			sendMessage(connectData);
-			setIsConnected(!isConnected);
-		} else {
-			if (!isConnected) {
-				curio.connect(() => {
-					console.log("Connected");
-					setIsConnected(true);
-				});
-			} else {
-				curio.disconnect(() => {
-					console.log("Disconnected");
-					setIsConnected(false);
-				});
-			}
-		}
+		const connectData: PeerData = {
+			type: DataType.CURIO_CONNECT,
+			data: { isConnected: isConnected },
+		};
+		sendMessage(connectData);
+		setIsConnected(!isConnected);
 	};
 
 	const handleMove = (x: number, y: number, distance: number) => {
-		if (sendMessage) {
-			const moveData: PeerData = {
-				type: DataType.CURIO_MOVE_VECTOR,
-				data: { x: x, y: y, speed: distance },
-			};
-			sendMessage(moveData);
+		const moveData: PeerData = {
+			type: DataType.CURIO_MOVE_VECTOR,
+			data: { x: x, y: y, speed: distance },
+		};
+		sendMessage(moveData);
 
-			if (!isMoving) {
-				const moveCommand: PeerData = {
-					type: DataType.CURIO_MOVE,
-					data: { message: "move" },
-				};
-				sendMessage(moveCommand);
-			}
-		} else {
-			curio.setParameters(x, y, distance);
-			if (!isMoving) {
-				curio.move();
-			}
+		if (!isMoving) {
+			const moveCommand: PeerData = {
+				type: DataType.CURIO_MOVE,
+				data: { message: "move" },
+			};
+			sendMessage(moveCommand);
 		}
 
 		setIsMoving(true);
@@ -90,97 +84,99 @@ export default function Controller() {
 	const handleStop = () => {
 		setIsMoving(false);
 
-		if (sendMessage) {
-			const moveData: PeerData = {
-				type: DataType.CURIO_MOVE_VECTOR,
-				data: { x: 0, y: 0, speed: 0 },
-			};
-			sendMessage(moveData);
-		} else {
-			curio.setParameters(0, 0, 0);
-		}
+		const moveData: PeerData = {
+			type: DataType.CURIO_MOVE_VECTOR,
+			data: { x: 0, y: 0, speed: 0 },
+		};
+		sendMessage(moveData);
 	};
 
 	useEffect(() => {
 		let intervalId: NodeJS.Timer;
 
 		if (isMoving) {
-			if (sendMessage) {
+			const moveCommand: PeerData = {
+				type: DataType.CURIO_MOVE,
+				data: { message: "move" },
+			};
+			sendMessage(moveCommand);
+			intervalId = setInterval(() => {
 				const moveCommand: PeerData = {
 					type: DataType.CURIO_MOVE,
 					data: { message: "move" },
 				};
+
 				sendMessage(moveCommand);
-			} else {
-				curio.move();
-			}
-			intervalId = setInterval(() => {
-				if (sendMessage) {
-					const moveCommand: PeerData = {
-						type: DataType.CURIO_MOVE,
-						data: { message: "move" },
-					};
-					sendMessage(moveCommand);
-				} else {
-					curio.move();
-				}
 			}, 1000);
 		}
 
 		return () => {
 			clearInterval(intervalId);
 			if (isConnected) {
-				if (sendMessage) {
-					const stopCommand: PeerData = {
-						type: DataType.CURIO_MOVE,
-						data: { message: "stop" },
-					};
-					sendMessage(stopCommand);
-				} else {
-					curio.stop();
-				}
+				const stopCommand: PeerData = {
+					type: DataType.CURIO_MOVE,
+					data: { message: "stop" },
+				};
+				sendMessage(stopCommand);
 			}
 		};
 	}, [isMoving]);
 
 	return (
-		<Stack
-			direction="column"
-			justifyContent="center"
-			alignItems="center"
-			spacing={20}
-		>
-			<Button
-				onClick={() => {
-					handleConnect();
-				}}
-				style={
-					isConnected
-						? {
-								backgroundColor: "rgba(171, 61, 89, 255)",
-						  }
-						: {
-								backgroundColor: "rgba(61, 89, 171, 255)",
-						  }
-				}
-				sx={{ mt: 10 }}
-				variant="contained"
-			>
-				{isConnected ? "DISCONNECT" : "CONNECT TO CURIO"}
-			</Button>
-			{isConnected && (
-				<Joystick
-					move={(e) => {
-						handleMove(e.x ?? 0, e.y ?? 0, e.distance ?? 0);
+		<Stack direction="column" justifyContent="center" alignItems="center">
+			{isPeerConnected ? (
+				<>
+					<div>
+						<video ref={remoteVideoRef} height="50%" />
+					</div>
+					<Button
+						onClick={() => {
+							handleConnect();
+						}}
+						style={
+							isConnected
+								? {
+										backgroundColor:
+											"rgba(171, 61, 89, 255)",
+								  }
+								: {
+										backgroundColor:
+											"rgba(61, 89, 171, 255)",
+								  }
+						}
+						sx={{ mb: 10, mt: 2 }}
+						variant="contained"
+					>
+						{isConnected ? "DISCONNECT" : "CONNECT TO CURIO"}
+					</Button>
+					{isConnected && (
+						<Joystick
+							move={(e) => {
+								handleMove(e.x ?? 0, e.y ?? 0, e.distance ?? 0);
+							}}
+							start={() => {
+								handleStart();
+							}}
+							stop={() => {
+								handleStop();
+							}}
+							throttle={10}
+						/>
+					)}
+				</>
+			) : (
+				<Button
+					onClick={() => {
+						peerConnection();
 					}}
-					start={() => {
-						handleStart();
+					style={{
+						backgroundColor: "green",
 					}}
-					stop={() => {
-						handleStop();
-					}}
-					throttle={10}
-				/>
+					sx={{ mt: 10 }}
+					variant="contained"
+				>
+					CONNECT TO THE HOST DEVICE
+				</Button>
 			)}
 		</Stack>
 	);
